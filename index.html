@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle Game</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>WORDLE</h1>
+            <div id="user-info" class="hidden">
+                <span id="user-display"></span>
+                <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</button>
+            </div>
+        </header>
+        <div id="user-section">
+            <div id="auth-container">
+                <div class="auth-header">
+                    <h1>WORDLE</h1>
+                    <p>Test your word-guessing skills</p>
+                </div>
+                
+                <div class="tabs">
+                    <button id="login-tab" class="tab active">Login</button>
+                    <button id="register-tab" class="tab">Register</button>
+                </div>
+
+                <div id="login-form" class="auth-form">
+                    <form id="auth-form">
+                        <div class="form-group">
+                            <div class="input-with-icon">
+                                <i class="fas fa-user"></i>
+                                <input type="text" id="username" name="username" placeholder="Username" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="input-with-icon">
+                                <i class="fas fa-lock"></i>
+                                <input type="password" id="password" name="password" placeholder="Password" required>
+                            </div>
+                        </div>
+                        <div class="form-buttons">
+                            <button type="button" id="login-btn" class="primary-btn">Login</button>
+                            <button type="button" id="register-btn" class="primary-btn hidden">Register</button>
+                        </div>
+                        <div id="auth-message"></div>
+                    </form>
+                    
+                    <div class="auth-footer">
+                        <p>Demo account: <span class="highlight">demo / password</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="game-container" class="hidden">
+            <div id="game-board">
+                <!-- Game board will be populated by JavaScript -->
+            </div>
+            
+            <div id="keyboard">
+                <div class="keyboard-row">
+                    <button data-key="q">q</button>
+                    <button data-key="w">w</button>
+                    <button data-key="e">e</button>
+                    <button data-key="r">r</button>
+                    <button data-key="t">t</button>
+                    <button data-key="y">y</button>
+                    <button data-key="u">u</button>
+                    <button data-key="i">i</button>
+                    <button data-key="o">o</button>
+                    <button data-key="p">p</button>
+                </div>
+                <div class="keyboard-row">
+                    <div class="spacer half"></div>
+                    <button data-key="a">a</button>
+                    <button data-key="s">s</button>
+                    <button data-key="d">d</button>
+                    <button data-key="f">f</button>
+                    <button data-key="g">g</button>
+                    <button data-key="h">h</button>
+                    <button data-key="j">j</button>
+                    <button data-key="k">k</button>
+                    <button data-key="l">l</button>
+                    <div class="spacer half"></div>
+                </div>
+                <div class="keyboard-row">
+                    <button data-key="enter" class="wide-key">Enter</button>
+                    <button data-key="z">z</button>
+                    <button data-key="x">x</button>
+                    <button data-key="c">c</button>
+                    <button data-key="v">v</button>
+                    <button data-key="b">b</button>
+                    <button data-key="n">n</button>
+                    <button data-key="m">m</button>
+                    <button data-key="backspace" class="wide-key"><i class="fas fa-backspace"></i></button>
+                </div>
+            </div>
+            
+            <div id="message-container"></div>
+
+            <div id="game-results" class="hidden">
+                <div class="results-header">
+                    <h2>Game Results</h2>
+                </div>
+                <div class="results-content">
+                    <p id="result-message"></p>
+                    <p id="word-reveal"></p>
+                    <div class="score-details">
+                        <div class="score-item">
+                            <span class="score-label">Attempts:</span>
+                            <span id="attempt-count" class="score-value">0/6</span>
+                        </div>
+                        <div class="score-item">
+                            <span class="score-label">Time:</span>
+                            <span id="time-count" class="score-value">0s</span>
+                        </div>
+                        <div class="score-item">
+                            <span class="score-label">Score:</span>
+                            <span id="final-score" class="score-value">0</span>
+                        </div>
+                    </div>
+                    <button id="new-game-btn"><i class="fas fa-redo"></i> Play Again</button>
+                    <button id="share-result-btn"><i class="fas fa-share-alt"></i> Share Result</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="highscores" class="hidden">
+            <div class="highscore-header">
+                <h2><i class="fas fa-trophy"></i> Top Scores</h2>
+                <button id="close-scores-btn" class="icon-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="score-tabs">
+                <button class="score-tab active" data-period="today">Today</button>
+                <button class="score-tab" data-period="yesterday">Yesterday</button>
+                <button class="score-tab" data-period="alltime">All Time</button>
+            </div>
+            <div id="score-list"></div>
+        </div>
+
+        <footer>
+            <div class="footer-buttons">
+                <button id="show-scores-btn"><i class="fas fa-trophy"></i> View High Scores</button>
+                <button id="how-to-play-btn"><i class="fas fa-question-circle"></i> How to Play</button>
+            </div>
+            <p>&copy; 2025 Wordle Game - School Project</p>
+        </footer>
+    </div>
+
+    <div id="how-to-play-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>How to Play Wordle</h2>
+                <button id="close-how-to-play" class="icon-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <p>Guess the WORDLE in 6 tries.</p>
+                <ul>
+                    <li>Each guess must be a valid 5-letter word.</li>
+                    <li>After each guess, the color of the tiles will change to show how close your guess was to the word.</li>
+                </ul>
+                <div class="example-section">
+                    <p><strong>Examples</strong></p>
+                    <div class="example">
+                        <div class="example-row">
+                            <div class="example-tile correct">W</div>
+                            <div class="example-tile">E</div>
+                            <div class="example-tile">A</div>
+                            <div class="example-tile">R</div>
+                            <div class="example-tile">Y</div>
+                        </div>
+                        <p>The letter W is in the word and in the correct spot.</p>
+                    </div>
+                    <div class="example">
+                        <div class="example-row">
+                            <div class="example-tile">P</div>
+                            <div class="example-tile present">I</div>
+                            <div class="example-tile">L</div>
+                            <div class="example-tile">O</div>
+                            <div class="example-tile">T</div>
+                        </div>
+                        <p>The letter I is in the word but in the wrong spot.</p>
+                    </div>
+                    <div class="example">
+                        <div class="example-row">
+                            <div class="example-tile">V</div>
+                            <div class="example-tile">A</div>
+                            <div class="example-tile">G</div>
+                            <div class="example-tile absent">U</div>
+                            <div class="example-tile">E</div>
+                        </div>
+                        <p>The letter U is not in the word in any spot.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification hidden"></div>
+    
+    <!-- Admin Panel -->
+    <button id="admin-button" class="admin-button hidden"><i class="fas fa-cog"></i> Admin Panel</button>
+    
+    <div id="admin-panel" class="hidden">
+        <div class="admin-header">
+            <h2><i class="fas fa-shield-alt"></i> Admin Dashboard</h2>
+            <button id="close-admin-btn" class="icon-btn"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="admin-tabs">
+            <button class="admin-tab active" data-tab="active-players">Active Players</button>
+            <button class="admin-tab" data-tab="all-scores">All Scores</button>
+        </div>
+        
+        <!-- Active Players Section -->
+        <div id="admin-active-players" class="admin-content">
+            <div class="admin-section-header">
+                <h3>Currently Active Players: <span id="active-player-count">0</span></h3>
+                <p class="admin-info">Players who haven't been active for 5+ minutes are automatically removed</p>
+            </div>
+            <div id="active-players-list" class="admin-list"></div>
+        </div>
+        
+        <!-- All Scores Section -->
+        <div id="admin-all-scores" class="admin-content hidden">
+            <div class="admin-section-header">
+                <h3>All Player Scores</h3>
+                <p class="admin-info">Click on the Delete button to remove a score</p>
+            </div>
+            <div id="admin-scores-list" class="admin-list"></div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

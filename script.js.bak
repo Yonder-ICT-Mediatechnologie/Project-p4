@@ -1,0 +1,1882 @@
+// API endpoints (moved to top for global access)
+const API_BASE_URL = 'api';
+const API_ENDPOINTS = {
+    AUTH: `${API_BASE_URL}/auth.php`,
+    SCORES: `${API_BASE_URL}/scores.php`,
+    ACTIVE_PLAYERS: `${API_BASE_URL}/active-players.php`
+};
+
+// User Authentication using PHP backend
+async function authenticateUser(username, password, isRegistration) {
+    try {
+        const action = isRegistration ? 'register' : 'login';
+        console.log(`Attempting ${action} for user ${username}`);
+        
+        const response = await fetch(`${API_ENDPOINTS.AUTH}?action=${action}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include', // Include cookies for session
+            body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        console.log(`${action} response:`, data);
+        return data;
+    } catch (error) {
+        console.error('Authentication error:', error);
+        return {
+            success: false,
+            message: 'Network error. Please try again later.'
+        };
+    }
+}
+
+// Check if user is already logged in from PHP session
+async function checkSession() {
+    try {
+        console.log('Checking session');
+        const response = await fetch(`${API_ENDPOINTS.AUTH}?action=check-session`, {
+            method: 'GET',
+            credentials: 'include' // Include cookies for session
+        });
+        
+        const data = await response.json();
+        console.log('Session check response:', data);
+        return data;
+    } catch (error) {
+        console.error('Session check error:', error);
+        return {
+            success: false,
+            message: 'Network error. Unable to check session.'
+        };
+    }
+}
+
+// Logout user using PHP backend
+async function logoutUser() {
+    try {
+        console.log('Attempting logout');
+        const response = await fetch(`${API_ENDPOINTS.AUTH}?action=logout`, {
+            method: 'POST',
+            credentials: 'include' // Include cookies for session
+        });
+        
+        const data = await response.json();
+        console.log('Logout response:', data);
+        return data;
+    } catch (error) {
+        console.error('Logout error:', error);
+        return {
+            success: false,
+            message: 'Network error. Please try again later.'
+        };
+    }
+}
+
+// DOM Elements
+const gameBoard = document.getElementById('game-board');
+const keyboard = document.getElementById('keyboard');
+const messageContainer = document.getElementById('message-container');
+const loginForm = document.getElementById('login-form');
+const authForm = document.getElementById('auth-form');
+const loginBtn = document.getElementById('login-btn');
+const registerBtn = document.getElementById('register-btn');
+const loginTab = document.getElementById('login-tab');
+const registerTab = document.getElementById('register-tab');
+const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
+const authMessage = document.getElementById('auth-message');
+const userSection = document.getElementById('user-section');
+const gameContainer = document.getElementById('game-container');
+const userInfo = document.getElementById('user-info');
+const userDisplay = document.getElementById('user-display');
+const logoutBtn = document.getElementById('logout-btn');
+const gameResults = document.getElementById('game-results');
+const resultMessage = document.getElementById('result-message');
+const wordReveal = document.getElementById('word-reveal');
+const attemptCount = document.getElementById('attempt-count');
+const timeCount = document.getElementById('time-count');
+const finalScore = document.getElementById('final-score');
+const newGameBtn = document.getElementById('new-game-btn');
+const shareResultBtn = document.getElementById('share-result-btn');
+const showScoresBtn = document.getElementById('show-scores-btn');
+const closeScoresBtn = document.getElementById('close-scores-btn');
+const highscoresSection = document.getElementById('highscores');
+const scoreList = document.getElementById('score-list');
+const notification = document.getElementById('notification');
+const scoreTabs = document.querySelectorAll('.score-tab');
+const howToPlayBtn = document.getElementById('how-to-play-btn');
+const howToPlayModal = document.getElementById('how-to-play-modal');
+const closeHowToPlayBtn = document.getElementById('close-how-to-play');
+
+// Game state
+const WORD_LENGTH = 5;
+const MAX_GUESSES = 6;
+let currentUser = null;
+let currentRow = 0;
+let currentTile = 0;
+let isGameOver = false;
+let targetWord = '';
+let guessedWords = [];
+let gameStartTime = null;
+let animationInProgress = false; // Flag to track if animations are in progress
+
+// List of 5-letter words for Wordle
+const words = [
+  "apple", "baker", "beach", "brain", "brake", "chair", "charm", "cloud", "dance", "dream", 
+  "drink", "earth", "flame", "ghost", "great", "heart", "house", "light", "money", "music", 
+  "paint", "party", "pizza", "place", "plant", "power", "radio", "river", "robot", "scene", 
+  "shape", "shark", "sheep", "sleep", "smile", "smoke", "snake", "space", "sport", "stage", 
+  "storm", "story", "sugar", "table", "taste", "theme", "tiger", "torch", "train", "water",
+  "world", "write", "youth", "about", "above", "abuse", "actor", "adapt", "admit", "adopt", 
+  "adult", "after", "again", "agent", "agree", "ahead", "alarm", "album", "alert", "alike", 
+  "alive", "allow", "alone", "along", "alter", "among", "anger", "angle", "angry", "ankle", 
+  "apart", "apple", "apply", "arena", "argue", "arise", "armor", "array", "arrow", "asset",
+  "avoid", "award", "aware", "badly", "baker", "bases", "basic", "basis", "beach", "began", 
+  "begin", "begun", "being", "below", "bench", "billy", "birth", "black", "blame", "blank", 
+  "blast", "bleed", "blend", "bless", "blind", "block", "blood", "board", "boast", "bonus"
+];
+
+let submittedRows = [false, false, false, false, false, false]; // Track submitted rows
+
+function submitGuess() {
+    // Prevent submission if animations are running or game is over
+    if (animationInProgress || isGameOver) {
+        return;
+    }
+    
+    // Set animation flag to true to prevent multiple submissions
+    animationInProgress = true;
+
+    if (currentTile < WORD_LENGTH) {
+        const row = document.querySelector(`.row:nth-child(${currentRow + 1})`);
+        row.classList.add('shake');
+        setTimeout(() => {
+            row.classList.remove('shake');
+            // Reset animation flag since submission was rejected
+            animationInProgress = false;
+        }, 500);
+        showNotification('Not enough letters');
+        return;
+    }
+
+    let currentGuess = '';
+    for (let i = 0; i < WORD_LENGTH; i++) {
+        currentGuess += gameBoard.querySelector(`[data-row="${currentRow}"][data-col="${i}"]`).textContent.toLowerCase();
+    }
+
+    if (!words.includes(currentGuess)) {
+        const row = document.querySelector(`.row:nth-child(${currentRow + 1})`);
+        row.classList.add('shake');
+        setTimeout(() => {
+            row.classList.remove('shake');
+            // Reset animation flag since submission was rejected
+            animationInProgress = false;
+        }, 500);
+        showNotification('Not a valid word');
+        return;
+    }
+
+    // Add to guessed words
+    guessedWords.push(currentGuess);
+
+    // Check the guess
+    const result = checkGuess(currentGuess);
+    
+    // Apply animations with delay between tiles
+    animateTiles(result);
+}
+
+function animateTiles(result) {
+    let delay = 0;
+    
+    // Make sure we're actually animating by setting the flag
+    animationInProgress = true;
+    
+    for (let i = 0; i < WORD_LENGTH; i++) {
+        setTimeout(() => {
+            const tile = gameBoard.querySelector(`[data-row="${currentRow}"][data-col="${i}"]`);
+            tile.classList.add('flip');
+            
+            setTimeout(() => {
+                if (result[i] === 'correct') {
+                    tile.classList.add('tile-correct');
+                } else if (result[i] === 'present') {
+                    tile.classList.add('tile-present');
+                } else {
+                    tile.classList.add('tile-absent');
+                }
+                
+                // Update keyboard
+                updateKeyboard(tile.textContent.toLowerCase(), result[i]);
+            }, 250);
+        }, delay);
+        
+        delay += 500;
+    }
+    
+    // Check win/lose after all animations
+    setTimeout(() => {
+        checkGameStatus(result);
+        // Animation is now complete
+        animationInProgress = false;
+    }, delay);
+}
+
+// Update user's active status
+async function updateActiveStatus() {
+    if (!currentUser) return;
+    
+    try {
+        await fetch(API_ENDPOINTS.ACTIVE_PLAYERS, {
+            method: 'POST',
+            credentials: 'include' // Include cookies for session
+        });
+    } catch (error) {
+        console.error('Error updating active status:', error);
+    }
+}
+
+// Get active players (admin only)
+async function getActivePlayers() {
+    try {
+        const response = await fetch(API_ENDPOINTS.ACTIVE_PLAYERS, {
+            method: 'GET',
+            credentials: 'include' // Include cookies for session
+        });
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching active players:', error);
+        return {
+            success: false,
+            message: 'Network error. Unable to fetch active players.'
+        };
+    }
+}
+
+// Save score to PHP backend
+async function saveScoreToDB(scoreData) {
+    if (!currentUser) return;
+    
+    try {
+        const response = await fetch(API_ENDPOINTS.SCORES, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(scoreData)
+        });
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error saving score:', error);
+        return {
+            success: false,
+            message: 'Network error. Unable to save score.'
+        };
+    }
+}
+
+// Fetch scores from PHP backend
+async function fetchScores(period = 'alltime') {
+    try {
+        const response = await fetch(`${API_ENDPOINTS.SCORES}?period=${period}`, {
+            method: 'GET',
+            credentials: 'include'
+        });
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching scores:', error);
+        return {
+            success: false,
+            message: 'Network error. Unable to fetch scores.'
+        };
+    }
+}
+
+// Delete score (admin only)
+async function deleteScoreFromDB(scoreId) {
+    try {
+        const response = await fetch(API_ENDPOINTS.SCORES, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({ score_id: scoreId })
+        });
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error deleting score:', error);
+        return {
+            success: false,
+            message: 'Network error. Unable to delete score.'
+        };
+    }
+}
+
+function loadScores(period) {
+    scoreList.innerHTML = '';
+    
+    // Get user data from localStorage
+    const users = JSON.parse(localStorage.getItem('wordle_users')) || {};
+    let allScores = [];
+    
+    // Create date objects for filtering
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    
+    // First add a header row
+    const headerRow = document.createElement('div');
+    headerRow.classList.add('score-header');
+    
+    const headerRank = document.createElement('span');
+    headerRank.textContent = '#';
+    headerRank.style.width = '30px';
+    
+    const headerName = document.createElement('span');
+    headerName.textContent = 'Player';
+    headerName.style.flex = '1';
+    headerName.style.textAlign = 'left';
+    headerName.style.marginLeft = '10px';
+    
+    const headerDetails = document.createElement('span');
+    headerDetails.textContent = 'Details';
+    headerDetails.style.width = '40%';
+    headerDetails.style.textAlign = 'center';
+    
+    const headerDate = document.createElement('span');
+    headerDate.textContent = 'Date';
+    headerDate.style.marginLeft = 'auto';
+    headerDate.style.marginRight = '10px';
+    
+    const headerScore = document.createElement('span');
+    headerScore.textContent = 'Score';
+    headerScore.style.width = '60px';
+    headerScore.style.textAlign = 'right';
+    
+    headerRow.appendChild(headerRank);
+    headerRow.appendChild(headerName);
+    headerRow.appendChild(headerDetails);
+    headerRow.appendChild(headerDate);
+    headerRow.appendChild(headerScore);
+    
+    scoreList.appendChild(headerRow);
+    
+    // Format date helper function
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric', 
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+    
+    // Collect all scores based on selected period
+    for (const username in users) {
+        if (!users[username].scores) continue;
+        
+        users[username].scores.forEach(scoreData => {
+            const scoreDate = new Date(scoreData.date);
+            
+            // Filter based on period
+            let include = false;
+            if (period === 'today') {
+                include = scoreDate >= todayStart;
+            } else if (period === 'yesterday') {
+                include = scoreDate >= yesterdayStart && scoreDate < todayStart;
+            } else { // alltime
+                include = true;
+            }
+            
+            if (include) {
+                allScores.push({
+                    username: username,
+                    score: scoreData.score,
+                    date: scoreData.date,
+                    attempts: scoreData.attempts || 'N/A',
+                    time: scoreData.time || 'N/A',
+                    word: scoreData.word || ''
+                });
+            }
+        });
+    }
+    
+    // Sort scores from highest to lowest
+    allScores.sort((a, b) => b.score - a.score);
+    
+    // Limit to top 10
+    allScores = allScores.slice(0, 10);
+    
+    // Show message if no scores
+    if (allScores.length === 0) {
+        const emptyItem = document.createElement('div');
+        emptyItem.classList.add('score-item', 'empty-scores');
+        emptyItem.textContent = 'No scores available for this period';
+        scoreList.appendChild(emptyItem);
+        return;
+    }
+    
+    // Display all scores
+    allScores.forEach((score, index) => {
+        const scoreItem = document.createElement('div');
+        scoreItem.classList.add('score-item');
+        
+        // Highlight current user's score
+        if (score.username === currentUser) {
+            scoreItem.classList.add('current-user');
+        }
+        
+        const rankSpan = document.createElement('span');
+        rankSpan.classList.add('score-rank');
+        rankSpan.textContent = `${index + 1}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('score-name');
+        nameSpan.textContent = score.username;
+        
+        const detailsDiv = document.createElement('div');
+        detailsDiv.classList.add('score-details');
+        
+        const attemptsSpan = document.createElement('span');
+        attemptsSpan.textContent = `${score.attempts}/6`;
+        
+        const timeSpan = document.createElement('span');
+        timeSpan.textContent = `${score.time}s`;
+        
+        const wordSpan = document.createElement('span');
+        wordSpan.textContent = score.word.toUpperCase();
+        
+        detailsDiv.appendChild(attemptsSpan);
+        detailsDiv.appendChild(timeSpan);
+        detailsDiv.appendChild(wordSpan);
+        
+        const dateSpan = document.createElement('span');
+        dateSpan.classList.add('score-date');
+        dateSpan.textContent = formatDate(score.date);
+        
+        const valueSpan = document.createElement('span');
+        valueSpan.classList.add('score-value');
+        valueSpan.textContent = score.score;
+        
+        scoreItem.appendChild(rankSpan);
+        scoreItem.appendChild(nameSpan);
+        scoreItem.appendChild(detailsDiv);
+        scoreItem.appendChild(dateSpan);
+        scoreItem.appendChild(valueSpan);
+        
+        scoreList.appendChild(scoreItem);
+    });
+}
+
+function saveScore(score) {
+    // Only save score if user is logged in
+    if (!currentUser) return;
+    
+    // Get existing users data
+    const users = JSON.parse(localStorage.getItem('wordle_users')) || {};
+    if (users[currentUser]) {
+        // Initialize scores array if it doesn't exist
+        users[currentUser].scores = users[currentUser].scores || [];
+        
+        // Add new score with complete data
+        users[currentUser].scores.push({
+            score: score,
+            date: new Date().toISOString(),
+            word: targetWord,
+            attempts: currentRow + 1,
+            time: Math.floor((Date.now() - gameStartTime) / 1000)
+        });
+        
+        // Sort scores in descending order
+        users[currentUser].scores.sort((a, b) => b.score - a.score);
+        
+        // Save back to localStorage
+        localStorage.setItem('wordle_users', JSON.stringify(users));
+        
+        // Show notification
+        showNotification('Score saved!');
+    }
+}
+
+// Keyboard input handling
+function handleKeyPress(key) {
+    if (isGameOver || animationInProgress) return;
+    
+    if (key === 'enter') {
+        submitGuess();
+    } else if (key === 'backspace') {
+        if (currentTile > 0) {
+            currentTile--;
+            updateTile(currentRow, currentTile, '');
+        }
+    } else if (/^[a-z]$/.test(key) && currentTile < WORD_LENGTH) {
+        updateTile(currentRow, currentTile, key.toUpperCase());
+        currentTile++;
+    }
+}
+
+// Mock API endpoints - In a real project these would connect to the backend
+const API_URL = 'http://localhost:8080/api'; // This would be your REST API URL
+
+// Utility Functions
+function getRandomWord() {
+    return words[Math.floor(Math.random() * words.length)];
+}
+
+function showNotification(message) {
+    notification.textContent = message;
+    notification.classList.remove('hidden');
+    setTimeout(() => {
+        notification.classList.add('hidden');
+    }, 3000);
+}
+
+// Tab switching for login/register
+function showLoginTab() {
+    loginTab.classList.add('active');
+    registerTab.classList.remove('active');
+    loginBtn.classList.remove('hidden');
+    registerBtn.classList.add('hidden');
+    authMessage.textContent = '';
+}
+
+function showRegisterTab() {
+    registerTab.classList.add('active');
+    loginTab.classList.remove('active');
+    registerBtn.classList.remove('hidden');
+    loginBtn.classList.add('hidden');
+    authMessage.textContent = '';
+}
+
+// Global variable to track active players
+let activePlayers = {};
+let pollingInterval;
+const ACTIVE_PLAYERS_STORAGE_KEY = 'wordle_active_players';
+const PLAYER_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
+const POLLING_INTERVAL = 2000; // 2 seconds - more frequent polling
+
+// Generate a unique session ID to identify this browser instance
+const sessionId = Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+let lastSyncTime = 0;
+
+// Add active player tracking function with shared localStorage
+function trackActivePlayer(username, isActive) {
+    if (!username) return;
+    
+    // Always get the latest data before updating
+    loadActivePlayersFromStorage();
+    
+    if (isActive) {
+        // Add or update player with timestamp and session ID
+        activePlayers[username] = {
+            timestamp: Date.now(),
+            session: sessionId
+        };
+    } else {
+        // Remove player from active players
+        if (activePlayers[username]) {
+            delete activePlayers[username];
+        }
+    }
+    
+    // Save updated active players to localStorage
+    saveActivePlayersToStorage();
+    
+    // Clean up players that haven't been active for more than the timeout
+    cleanupInactivePlayers();
+}
+
+// Load active players from localStorage with improved error handling
+function loadActivePlayersFromStorage() {
+    try {
+        const storedData = localStorage.getItem(ACTIVE_PLAYERS_STORAGE_KEY);
+        if (storedData) {
+            const parsedData = JSON.parse(storedData);
+            
+            // Ensure we have an object
+            if (parsedData && typeof parsedData === 'object') {
+                activePlayers = parsedData;
+                return;
+            }
+        }
+        
+        // Default to empty object if no valid data
+        activePlayers = {};
+    } catch (error) {
+        console.error('Error loading active players from localStorage:', error);
+        activePlayers = {};
+    }
+}
+
+// Save active players to localStorage with improved error handling
+function saveActivePlayersToStorage() {
+    try {
+        lastSyncTime = Date.now();
+        localStorage.setItem(ACTIVE_PLAYERS_STORAGE_KEY, JSON.stringify(activePlayers));
+    } catch (error) {
+        console.error('Error saving active players to localStorage:', error);
+    }
+}
+
+// Clean up players who haven't been active for specified timeout
+function cleanupInactivePlayers() {
+    const now = Date.now();
+    let playersRemoved = false;
+    
+    Object.keys(activePlayers).forEach(player => {
+        // Handle both new format (with timestamp property) and old format (direct timestamp)
+        const timestamp = activePlayers[player].timestamp || activePlayers[player];
+        
+        if (now - timestamp > PLAYER_TIMEOUT) {
+            delete activePlayers[player];
+            playersRemoved = true;
+        }
+    });
+    
+    // Only save back to storage if we removed players
+    if (playersRemoved) {
+        saveActivePlayersToStorage();
+    }
+}
+
+// Start polling to keep active players list updated across browsers
+function startActivePlayersPolling() {
+    // Clear any existing polling interval
+    stopActivePlayersPolling();
+    
+    // Initial update of current user's activity
+    if (currentUser) {
+        trackActivePlayer(currentUser, true);
+    }
+    
+    // Set up polling interval
+    pollingInterval = setInterval(() => {
+        // Update current user's timestamp if logged in
+        if (currentUser) {
+            // Check if other browsers have updated the data
+            const previousSync = lastSyncTime;
+            
+            // Load latest data first
+            loadActivePlayersFromStorage();
+            
+            // Keep the current user active
+            trackActivePlayer(currentUser, true);
+            
+            // Refresh admin view if we're in admin panel and data changed
+            if (isAdmin(currentUser) && 
+                document.getElementById('admin-panel') && 
+                !document.getElementById('admin-panel').classList.contains('hidden') &&
+                document.getElementById('admin-active-players') && 
+                !document.getElementById('admin-active-players').classList.contains('hidden')) {
+                loadActivePlayers();
+            }
+        }
+    }, POLLING_INTERVAL);
+}
+
+// Stop polling when user logs out or closes the page
+function stopActivePlayersPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+}
+
+// Check if user is an admin
+function isAdmin(username) {
+    // For simplicity, we'll make a specific username an admin (you should implement a more secure method in production)
+    return username === 'admin';
+}
+
+// Show admin panel if the user is an admin
+function showAdminPanel() {
+    if (isAdmin(currentUser)) {
+        document.getElementById('admin-button').classList.remove('hidden');
+    } else {
+        document.getElementById('admin-button').classList.add('hidden');
+    }
+}
+
+// Load active players for admin view
+function loadActivePlayers() {
+    const activePlayersList = document.getElementById('active-players-list');
+    if (!activePlayersList) return;
+    
+    activePlayersList.innerHTML = '';
+    
+    // Always reload the latest data
+    loadActivePlayersFromStorage();
+    cleanupInactivePlayers();
+    
+    // Get active players from the refreshed data
+    const players = Object.keys(activePlayers);
+    
+    if (players.length === 0) {
+        const emptyItem = document.createElement('div');
+        emptyItem.classList.add('admin-item', 'empty-item');
+        emptyItem.textContent = 'No active players at the moment';
+        activePlayersList.appendChild(emptyItem);
+        
+        // Update active player count
+        const countElement = document.getElementById('active-player-count');
+        if (countElement) {
+            countElement.textContent = '0';
+        }
+        return;
+    }
+    
+    // Add header row
+    const headerRow = document.createElement('div');
+    headerRow.classList.add('admin-header');
+    
+    const playerHeader = document.createElement('span');
+    playerHeader.textContent = 'Player';
+    playerHeader.style.flex = '1';
+    
+    const lastActiveHeader = document.createElement('span');
+    lastActiveHeader.textContent = 'Last Active';
+    lastActiveHeader.style.width = '180px';
+    lastActiveHeader.style.textAlign = 'right';
+    
+    headerRow.appendChild(playerHeader);
+    headerRow.appendChild(lastActiveHeader);
+    activePlayersList.appendChild(headerRow);
+    
+    // Add all active players
+    players.forEach(player => {
+        const playerItem = document.createElement('div');
+        playerItem.classList.add('admin-item');
+        
+        const playerName = document.createElement('span');
+        playerName.classList.add('player-name');
+        playerName.textContent = player;
+        playerName.style.flex = '1';
+        
+        const lastActive = document.createElement('span');
+        lastActive.classList.add('last-active');
+        
+        // Handle both new format (with timestamp property) and old format (direct timestamp)
+        const playerData = activePlayers[player];
+        const timestamp = playerData.timestamp || playerData;
+        
+        // Format the timestamp
+        const date = new Date(timestamp);
+        lastActive.textContent = date.toLocaleTimeString();
+        lastActive.style.width = '180px';
+        lastActive.style.textAlign = 'right';
+        
+        playerItem.appendChild(playerName);
+        playerItem.appendChild(lastActive);
+        activePlayersList.appendChild(playerItem);
+    });
+    
+    // Update active player count
+    const countElement = document.getElementById('active-player-count');
+    if (countElement) {
+        countElement.textContent = players.length;
+    }
+}
+
+// Load all scores for admin view (with delete buttons)
+function loadAllScores() {
+    const scoreList = document.getElementById('admin-scores-list');
+    scoreList.innerHTML = '';
+    
+    // Get user data from localStorage
+    const users = JSON.parse(localStorage.getItem('wordle_users')) || {};
+    let allScores = [];
+    
+    // Format date helper function
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+    
+    // Collect all scores
+    for (const username in users) {
+        if (!users[username].scores) continue;
+        
+        users[username].scores.forEach((scoreData, index) => {
+            allScores.push({
+                username: username,
+                scoreIndex: index,
+                score: scoreData.score,
+                date: scoreData.date,
+                attempts: scoreData.attempts || 'N/A',
+                time: scoreData.time || 'N/A',
+                word: scoreData.word || ''
+            });
+        });
+    }
+    
+    // Sort scores from highest to lowest
+    allScores.sort((a, b) => b.score - a.score);
+    
+    // Show message if no scores
+    if (allScores.length === 0) {
+        const emptyItem = document.createElement('div');
+        emptyItem.classList.add('admin-item', 'empty-item');
+        emptyItem.textContent = 'No scores available';
+        scoreList.appendChild(emptyItem);
+        return;
+    }
+    
+    // Add header
+    const headerRow = document.createElement('div');
+    headerRow.classList.add('admin-header');
+    
+    const userHeader = document.createElement('span');
+    userHeader.textContent = 'User';
+    userHeader.style.width = '120px';
+    
+    const scoreHeader = document.createElement('span');
+    scoreHeader.textContent = 'Score';
+    scoreHeader.style.width = '70px';
+    scoreHeader.style.textAlign = 'center';
+    
+    const detailsHeader = document.createElement('span');
+    detailsHeader.textContent = 'Details';
+    detailsHeader.style.flex = '1';
+    
+    const dateHeader = document.createElement('span');
+    dateHeader.textContent = 'Date';
+    dateHeader.style.width = '180px';
+    dateHeader.style.textAlign = 'center';
+    
+    const actionHeader = document.createElement('span');
+    actionHeader.textContent = 'Action';
+    actionHeader.style.width = '80px';
+    actionHeader.style.textAlign = 'center';
+    
+    headerRow.appendChild(userHeader);
+    headerRow.appendChild(scoreHeader);
+    headerRow.appendChild(detailsHeader);
+    headerRow.appendChild(dateHeader);
+    headerRow.appendChild(actionHeader);
+    scoreList.appendChild(headerRow);
+    
+    // Display all scores with delete buttons
+    allScores.forEach((score) => {
+        const scoreItem = document.createElement('div');
+        scoreItem.classList.add('admin-item');
+        
+        const userSpan = document.createElement('span');
+        userSpan.classList.add('admin-username');
+        userSpan.textContent = score.username;
+        userSpan.style.width = '120px';
+        
+        const scoreSpan = document.createElement('span');
+        scoreSpan.classList.add('admin-score');
+        scoreSpan.textContent = score.score;
+        scoreSpan.style.width = '70px';
+        scoreSpan.style.textAlign = 'center';
+        
+        const detailsSpan = document.createElement('span');
+        detailsSpan.classList.add('admin-details');
+        detailsSpan.textContent = `Word: ${score.word.toUpperCase()} | Attempts: ${score.attempts}/6 | Time: ${score.time}s`;
+        detailsSpan.style.flex = '1';
+        
+        const dateSpan = document.createElement('span');
+        dateSpan.classList.add('admin-date');
+        dateSpan.textContent = formatDate(score.date);
+        dateSpan.style.width = '180px';
+        dateSpan.style.textAlign = 'center';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.classList.add('admin-delete-btn');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.style.width = '80px';
+        deleteBtn.style.textAlign = 'center';
+        deleteBtn.addEventListener('click', () => {
+            deleteScore(score.username, score.scoreIndex);
+            scoreItem.remove(); // Remove from display
+        });
+        
+        scoreItem.appendChild(userSpan);
+        scoreItem.appendChild(scoreSpan);
+        scoreItem.appendChild(detailsSpan);
+        scoreItem.appendChild(dateSpan);
+        scoreItem.appendChild(deleteBtn);
+        
+        scoreList.appendChild(scoreItem);
+    });
+}
+
+// Delete a score
+function deleteScore(username, scoreIndex) {
+    const users = JSON.parse(localStorage.getItem('wordle_users')) || {};
+    
+    if (users[username] && users[username].scores && users[username].scores[scoreIndex]) {
+        // Remove the score
+        users[username].scores.splice(scoreIndex, 1);
+        
+        // Save back to localStorage
+        localStorage.setItem('wordle_users', JSON.stringify(users));
+        
+        // Show notification
+        showNotification('Score deleted successfully');
+    }
+}
+
+// Show admin panel
+function showAdmin() {
+    if (!isAdmin(currentUser)) {
+        return; // Only admins can see this
+    }
+    
+    // Hide other sections
+    gameContainer.classList.add('hidden');
+    highscoresSection.classList.add('hidden');
+    
+    // Show admin panel
+    document.getElementById('admin-panel').classList.remove('hidden');
+    
+    // Default to active players tab
+    showAdminTab('active-players');
+    
+    // Load active players data
+    loadActivePlayers();
+}
+
+// Hide admin panel
+function hideAdmin() {
+    document.getElementById('admin-panel').classList.add('hidden');
+    gameContainer.classList.remove('hidden');
+}
+
+// Show specific admin tab
+function showAdminTab(tabName) {
+    // Hide all admin content
+    const adminContents = document.querySelectorAll('.admin-content');
+    adminContents.forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Remove active class from all tabs
+    const adminTabs = document.querySelectorAll('.admin-tab');
+    adminTabs.forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Show selected content and activate tab
+    document.getElementById(`admin-${tabName}`).classList.remove('hidden');
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    
+    // Load appropriate data
+    if (tabName === 'active-players') {
+        loadActivePlayers();
+    } else if (tabName === 'all-scores') {
+        loadAllScores();
+    }
+}
+
+function login() {
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!username || !password) {
+        authMessage.textContent = 'Please enter both username and password';
+        return;
+    }
+    
+    authMessage.textContent = 'Logging in...';
+    
+    authenticateUser(username, password, false)
+        .then(response => {
+            if (response.success) {
+                currentUser = response.user.username;
+                isAdmin = response.user.is_admin;
+                userDisplay.textContent = currentUser;
+                
+                // Hide login form and show game
+                userSection.classList.add('hidden');
+                userInfo.classList.remove('hidden');
+                gameContainer.classList.remove('hidden');
+                
+                // Check if admin and show admin button if necessary
+                if (isAdmin) {
+                    document.getElementById('admin-button').classList.remove('hidden');
+                }
+                
+                // Start a new game
+                startNewGame();
+                
+                // Set up heartbeat to update active status
+                startHeartbeat();
+                
+                // Show welcome notification
+                showNotification(`Welcome back, ${currentUser}!`);
+            } else {
+                authMessage.textContent = response.message;
+                authMessage.classList.add('error');
+                setTimeout(() => {
+                    authMessage.classList.remove('error');
+                }, 2000);
+            }
+        });
+}
+
+function register() {
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!username || !password) {
+        authMessage.textContent = 'Please enter both username and password';
+        return;
+    }
+    
+    if (username.length < 3) {
+        authMessage.textContent = 'Username must be at least 3 characters';
+        return;
+    }
+    
+    if (password.length < 6) {
+        authMessage.textContent = 'Password must be at least 6 characters';
+        return;
+    }
+    
+    authMessage.textContent = 'Registering...';
+    
+    authenticateUser(username, password, true)
+        .then(response => {
+            if (response.success) {
+                authMessage.textContent = 'Registration successful! You can now log in.';
+                setTimeout(() => {
+                    // Auto-login after registration
+                    login();
+                }, 1000);
+            } else {
+                authMessage.textContent = response.message;
+            }
+        });
+}
+
+function logout() {
+    logoutUser()
+        .then(response => {
+            // Stop heartbeat
+            stopHeartbeat();
+            
+            currentUser = null;
+            isAdmin = false;
+            
+            // Reset the game state
+            resetGame();
+            
+            // Hide game and admin panels and show login
+            userInfo.classList.add('hidden');
+            gameContainer.classList.add('hidden');
+            highscoresSection.classList.add('hidden');
+            document.getElementById('admin-panel').classList.add('hidden');
+            document.getElementById('admin-button').classList.add('hidden');
+            userSection.classList.remove('hidden');
+            
+            // Clear input fields
+            usernameInput.value = '';
+            passwordInput.value = '';
+            authMessage.textContent = '';
+            
+            // Switch back to login tab
+            showLoginTab();
+        });
+}
+
+// Game Logic
+function resetGame() {
+    // Clear the game board
+    gameBoard.innerHTML = '';
+    currentRow = 0;
+    currentTile = 0;
+    isGameOver = false;
+    guessedWords = [];
+    
+    // Reset keyboard colors
+    const keys = document.querySelectorAll('.keyboard-row button');
+    keys.forEach(key => {
+        key.classList.remove('correct', 'present', 'absent');
+    });
+    
+    // Hide game results
+    gameResults.classList.add('hidden');
+    messageContainer.textContent = '';
+}
+
+function startNewGame() {
+    resetGame();
+    
+    // Pick a new target word
+    targetWord = getRandomWord();
+    console.log('Target word: ' + targetWord); // For testing only
+    
+    // Create game board
+    createBoard();
+    
+    // Start timing
+    gameStartTime = Date.now();
+}
+
+function createBoard() {
+    for (let i = 0; i < MAX_GUESSES; i++) {
+        const row = document.createElement('div');
+        row.classList.add('row');
+        
+        for (let j = 0; j < WORD_LENGTH; j++) {
+            const tile = document.createElement('div');
+            tile.classList.add('tile');
+            tile.dataset.row = i;
+            tile.dataset.col = j;
+            row.appendChild(tile);
+        }
+        
+        gameBoard.appendChild(row);
+    }
+}
+
+function updateTile(row, col, letter) {
+    const tile = gameBoard.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+    if (tile) {
+        tile.textContent = letter;
+        if (letter) {
+            tile.classList.add('tile-active');
+        } else {
+            tile.classList.remove('tile-active');
+        }
+    }
+}
+
+function checkGuess(guess) {
+    const result = [];
+    const letterCounts = {};
+    
+    // Count letters in target word
+    for (const letter of targetWord) {
+        letterCounts[letter] = (letterCounts[letter] || 0) + 1;
+    }
+    
+    // First pass: find correct positions
+    for (let i = 0; i < guess.length; i++) {
+        const letter = guess[i];
+        
+        if (letter === targetWord[i]) {
+            result.push('correct');
+            letterCounts[letter]--;
+        } else {
+            result.push(null);
+        }
+    }
+    
+    // Second pass: find present but wrong position
+    for (let i = 0; i < guess.length; i++) {
+        if (result[i] !== null) continue;
+        
+        const letter = guess[i];
+        
+        if (letterCounts[letter] && letterCounts[letter] > 0) {
+            result[i] = 'present';
+            letterCounts[letter]--;
+        } else {
+            result[i] = 'absent';
+        }
+    }
+    
+    return result;
+}
+
+function updateKeyboard(letter, status) {
+    const key = document.querySelector(`button[data-key="${letter}"]`);
+    if (!key) return;
+    
+    // Don't downgrade a key's status
+    if (key.classList.contains('correct')) return;
+    if (key.classList.contains('present') && status !== 'correct') return;
+    
+    // Remove old status classes
+    key.classList.remove('correct', 'present', 'absent');
+    
+    // Add new status class
+    key.classList.add(status);
+}
+
+function checkGameStatus(result) {
+    const isWin = result.every(r => r === 'correct');
+
+    if (isWin) {
+        gameOver(true);
+    } else if (currentRow === MAX_GUESSES - 1) {
+        gameOver(false);
+    } else {
+        // Continue to next row
+        currentRow++;
+        currentTile = 0;
+        
+        // Make sure we reset the animation flag to allow new input
+        animationInProgress = false;
+    }
+}
+
+function gameOver(isWin) {
+    isGameOver = true;
+    
+    // Calculate score - faster completion time and fewer guesses is better
+    const gameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+    let score = 0;
+    
+    if (isWin) {
+        // Base score: 1000 - (100 * attempts used)
+        score = 1000 - (currentRow * 100);
+        
+        // Time bonus: faster = better, but max 500 points
+        const timeBonus = Math.max(0, 500 - Math.floor(gameTime / 2));
+        score += timeBonus;
+        
+        resultMessage.textContent = `Awesome! You found the word!`;
+        wordReveal.textContent = targetWord.toUpperCase();
+        showNotification('Great job!');
+        
+        // Update result stats
+        attemptCount.textContent = `${currentRow + 1}/6`;
+        timeCount.textContent = `${gameTime}s`;
+        finalScore.textContent = score;
+        
+        // Save score
+        saveScore(score);
+    } else {
+        resultMessage.textContent = `Better luck next time!`;
+        wordReveal.textContent = `The word was: ${targetWord.toUpperCase()}`;
+        
+        // Update result stats
+        attemptCount.textContent = `6/6`;
+        timeCount.textContent = `${gameTime}s`;
+        finalScore.textContent = '0';
+    }
+    
+    // Show game results
+    gameResults.classList.remove('hidden');
+}
+
+function saveScore(score) {
+    // Only save score if user is logged in
+    if (!currentUser) return;
+    
+    // Prepare score data
+    const scoreData = {
+        score: score,
+        word: targetWord,
+        attempts: currentRow + 1,
+        time: Math.floor((Date.now() - gameStartTime) / 1000)
+    };
+    
+    // Save score to the database
+    saveScoreToDB(scoreData)
+        .then(response => {
+            if (response.success) {
+                showNotification('Score saved!');
+            } else {
+                showNotification('Error saving score: ' + response.message);
+            }
+        });
+}
+
+// Share result functionality
+function shareResults() {
+    if (!isGameOver) return;
+    
+    let resultText = `Wordle: ${currentRow + 1}/6\n\n`;
+    
+    // Create visual representation of guesses using emojis
+    guessedWords.forEach((word, wordIndex) => {
+        const result = checkGuess(word);
+        let rowEmojis = '';
+        
+        result.forEach((letterResult) => {
+            if (letterResult === 'correct') {
+                rowEmojis += '🟩';
+            } else if (letterResult === 'present') {
+                rowEmojis += '🟨';
+            } else {
+                rowEmojis += '⬛';
+            }
+        });
+        
+        resultText += rowEmojis + '\n';
+    });
+    
+    // Copy to clipboard
+    try {
+        navigator.clipboard.writeText(resultText).then(() => {
+            showNotification('Results copied to clipboard!');
+        });
+    } catch (err) {
+        console.error('Failed to copy results: ', err);
+        // Fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = resultText;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showNotification('Results copied to clipboard!');
+    }
+}
+
+// Highscores
+function showHighscores() {
+    highscoresSection.classList.remove('hidden');
+    
+    // Default to today's scores
+    const activeTab = document.querySelector('.score-tab.active');
+    loadScores(activeTab ? activeTab.getAttribute('data-period') : 'today');
+}
+
+function hideHighscores() {
+    highscoresSection.classList.add('hidden');
+}
+
+// Modal functions
+function showHowToPlay() {
+    howToPlayModal.classList.remove('hidden');
+}
+
+function hideHowToPlay() {
+    howToPlayModal.classList.add('hidden');
+}
+
+// Keep active players updated with heartbeat
+let heartbeatInterval;
+
+function startHeartbeat() {
+    // Start polling for active players
+    startActivePlayersPolling();
+    
+    // Update active status every minute (more aggressive update)
+    heartbeatInterval = setInterval(() => {
+        if (currentUser) {
+            trackActivePlayer(currentUser, true);
+        }
+    }, 60 * 1000); // Every minute
+}
+
+function stopHeartbeat() {
+    // Stop polling
+    stopActivePlayersPolling();
+    
+    // Clear heartbeat interval
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+    }
+}
+
+// Adding console logs for debugging button events
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM fully loaded');
+    
+    // Log button elements to check if they exist
+    console.log('Login button:', loginBtn);
+    console.log('Register button:', registerBtn);
+    console.log('Login tab:', loginTab);
+    console.log('Register tab:', registerTab);
+    console.log('Logout button:', logoutBtn);
+    
+    // Check if user is logged in from PHP session
+    checkSession()
+        .then(response => {
+            console.log('Session check complete:', response);
+            if (response.success) {
+                currentUser = response.user.username;
+                isAdmin = response.user.is_admin;
+                userDisplay.textContent = currentUser;
+                
+                // Hide login form and show game
+                userSection.classList.add('hidden');
+                userInfo.classList.remove('hidden');
+                gameContainer.classList.remove('hidden');
+                
+                // Check if admin and show admin button if necessary
+                if (isAdmin) {
+                    document.getElementById('admin-button').classList.remove('hidden');
+                }
+                
+                // Start a new game
+                startNewGame();
+                
+                // Start heartbeat for active player tracking
+                startHeartbeat();
+            }
+        })
+        .catch(error => {
+            console.error('Error during session check:', error);
+        });
+    
+    // Auth buttons and tabs with explicit event listeners and debug logs
+    if (loginBtn) {
+        loginBtn.addEventListener('click', (e) => {
+            console.log('Login button clicked');
+            e.preventDefault();
+            login();
+        });
+    }
+    
+    if (registerBtn) {
+        registerBtn.addEventListener('click', (e) => {
+            console.log('Register button clicked');
+            e.preventDefault();
+            register();
+        });
+    }
+    
+    if (loginTab) {
+        loginTab.addEventListener('click', (e) => {
+            console.log('Login tab clicked');
+            e.preventDefault();
+            showLoginTab();
+        });
+    }
+    
+    if (registerTab) {
+        registerTab.addEventListener('click', (e) => {
+            console.log('Register tab clicked');
+            e.preventDefault();
+            showRegisterTab();
+        });
+    }
+    
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', (e) => {
+            console.log('Logout button clicked');
+            e.preventDefault();
+            logout();
+        });
+    }
+    
+    // Rest of your event listeners...
+});
+
+// Modified loadScores function
+async function loadScores(period) {
+    scoreList.innerHTML = '';
+    
+    // Show loading indicator
+    const loadingItem = document.createElement('div');
+    loadingItem.classList.add('score-item', 'loading-scores');
+    loadingItem.textContent = 'Loading scores...';
+    scoreList.appendChild(loadingItem);
+    
+    try {
+        const response = await fetchScores(period);
+        
+        scoreList.innerHTML = ''; // Clear loading
+        
+        if (!response.success) {
+            const errorItem = document.createElement('div');
+            errorItem.classList.add('score-item', 'error-scores');
+            errorItem.textContent = 'Error loading scores: ' + response.message;
+            scoreList.appendChild(errorItem);
+            return;
+        }
+        
+        const scores = response.scores;
+        
+        // First add a header row
+        const headerRow = document.createElement('div');
+        headerRow.classList.add('score-header');
+        
+        const headerRank = document.createElement('span');
+        headerRank.textContent = '#';
+        headerRank.style.width = '30px';
+        
+        const headerName = document.createElement('span');
+        headerName.textContent = 'Player';
+        headerName.style.flex = '1';
+        headerName.style.textAlign = 'left';
+        headerName.style.marginLeft = '10px';
+        
+        const headerDetails = document.createElement('span');
+        headerDetails.textContent = 'Details';
+        headerDetails.style.width = '40%';
+        headerDetails.style.textAlign = 'center';
+        
+        const headerDate = document.createElement('span');
+        headerDate.textContent = 'Date';
+        headerDate.style.marginLeft = 'auto';
+        headerDate.style.marginRight = '10px';
+        
+        const headerScore = document.createElement('span');
+        headerScore.textContent = 'Score';
+        headerScore.style.width = '60px';
+        headerScore.style.textAlign = 'right';
+        
+        headerRow.appendChild(headerRank);
+        headerRow.appendChild(headerName);
+        headerRow.appendChild(headerDetails);
+        headerRow.appendChild(headerDate);
+        headerRow.appendChild(headerScore);
+        
+        scoreList.appendChild(headerRow);
+        
+        // Format date helper function
+        const formatDate = (dateString) => {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric', 
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        };
+        
+        // Show message if no scores
+        if (scores.length === 0) {
+            const emptyItem = document.createElement('div');
+            emptyItem.classList.add('score-item', 'empty-scores');
+            emptyItem.textContent = 'No scores available for this period';
+            scoreList.appendChild(emptyItem);
+            return;
+        }
+        
+        // Display all scores
+        scores.forEach((score, index) => {
+            const scoreItem = document.createElement('div');
+            scoreItem.classList.add('score-item');
+            
+            // Highlight current user's score
+            if (score.username === currentUser) {
+                scoreItem.classList.add('current-user');
+            }
+            
+            const rankSpan = document.createElement('span');
+            rankSpan.classList.add('score-rank');
+            rankSpan.textContent = `${index + 1}`;
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.classList.add('score-name');
+            nameSpan.textContent = score.username;
+            
+            const detailsDiv = document.createElement('div');
+            detailsDiv.classList.add('score-details');
+            
+            const attemptsSpan = document.createElement('span');
+            attemptsSpan.textContent = `${score.attempts}/6`;
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = `${score.time}s`;
+            
+            const wordSpan = document.createElement('span');
+            wordSpan.textContent = score.word.toUpperCase();
+            
+            detailsDiv.appendChild(attemptsSpan);
+            detailsDiv.appendChild(timeSpan);
+            detailsDiv.appendChild(wordSpan);
+            
+            const dateSpan = document.createElement('span');
+            dateSpan.classList.add('score-date');
+            dateSpan.textContent = formatDate(score.date);
+            
+            const valueSpan = document.createElement('span');
+            valueSpan.classList.add('score-value');
+            valueSpan.textContent = score.score;
+            
+            scoreItem.appendChild(rankSpan);
+            scoreItem.appendChild(nameSpan);
+            scoreItem.appendChild(detailsDiv);
+            scoreItem.appendChild(dateSpan);
+            scoreItem.appendChild(valueSpan);
+            
+            scoreList.appendChild(scoreItem);
+        });
+    } catch (error) {
+        console.error('Error loading scores:', error);
+        scoreList.innerHTML = '';
+        const errorItem = document.createElement('div');
+        errorItem.classList.add('score-item', 'error-scores');
+        errorItem.textContent = 'Error loading scores. Please try again.';
+        scoreList.appendChild(errorItem);
+    }
+}
+
+// Modified loadActivePlayers function
+async function loadActivePlayers() {
+    const activePlayersList = document.getElementById('active-players-list');
+    if (!activePlayersList) return;
+    
+    activePlayersList.innerHTML = '';
+    
+    // Show loading indicator
+    const loadingItem = document.createElement('div');
+    loadingItem.classList.add('admin-item', 'loading-item');
+    loadingItem.textContent = 'Loading active players...';
+    activePlayersList.appendChild(loadingItem);
+    
+    try {
+        const response = await getActivePlayers();
+        
+        activePlayersList.innerHTML = ''; // Clear loading
+        
+        if (!response.success) {
+            const errorItem = document.createElement('div');
+            errorItem.classList.add('admin-item', 'error-item');
+            errorItem.textContent = 'Error: ' + response.message;
+            activePlayersList.appendChild(errorItem);
+            return;
+        }
+        
+        const players = response.players;
+        const count = response.count;
+        
+        if (players.length === 0) {
+            const emptyItem = document.createElement('div');
+            emptyItem.classList.add('admin-item', 'empty-item');
+            emptyItem.textContent = 'No active players at the moment';
+            activePlayersList.appendChild(emptyItem);
+            
+            // Update active player count
+            document.getElementById('active-player-count').textContent = '0';
+            return;
+        }
+        
+        // Add header row
+        const headerRow = document.createElement('div');
+        headerRow.classList.add('admin-header');
+        
+        const playerHeader = document.createElement('span');
+        playerHeader.textContent = 'Player';
+        playerHeader.style.flex = '1';
+        
+        const lastActiveHeader = document.createElement('span');
+        lastActiveHeader.textContent = 'Last Active';
+        lastActiveHeader.style.width = '180px';
+        lastActiveHeader.style.textAlign = 'right';
+        
+        headerRow.appendChild(playerHeader);
+        headerRow.appendChild(lastActiveHeader);
+        activePlayersList.appendChild(headerRow);
+        
+        // Add all active players
+        players.forEach(player => {
+            const playerItem = document.createElement('div');
+            playerItem.classList.add('admin-item');
+            
+            const playerName = document.createElement('span');
+            playerName.classList.add('player-name');
+            playerName.textContent = player.username;
+            playerName.style.flex = '1';
+            
+            const lastActive = document.createElement('span');
+            lastActive.classList.add('last-active');
+            
+            // Format the timestamp
+            const date = new Date(player.last_activity);
+            lastActive.textContent = date.toLocaleTimeString();
+            lastActive.style.width = '180px';
+            lastActive.style.textAlign = 'right';
+            
+            playerItem.appendChild(playerName);
+            playerItem.appendChild(lastActive);
+            activePlayersList.appendChild(playerItem);
+        });
+        
+        // Update active player count
+        document.getElementById('active-player-count').textContent = count;
+    } catch (error) {
+        console.error('Error loading active players:', error);
+        activePlayersList.innerHTML = '';
+        const errorItem = document.createElement('div');
+        errorItem.classList.add('admin-item', 'error-item');
+        errorItem.textContent = 'Error loading active players. Please try again.';
+        activePlayersList.appendChild(errorItem);
+    }
+}
+
+// Modified loadAllScores function for admin
+async function loadAllScores() {
+    const adminScoresList = document.getElementById('admin-scores-list');
+    if (!adminScoresList) return;
+    
+    adminScoresList.innerHTML = '';
+    
+    // Show loading indicator
+    const loadingItem = document.createElement('div');
+    loadingItem.classList.add('admin-item', 'loading-item');
+    loadingItem.textContent = 'Loading all scores...';
+    adminScoresList.appendChild(loadingItem);
+    
+    try {
+        const response = await fetchScores('alltime');
+        
+        adminScoresList.innerHTML = ''; // Clear loading
+        
+        if (!response.success) {
+            const errorItem = document.createElement('div');
+            errorItem.classList.add('admin-item', 'error-item');
+            errorItem.textContent = 'Error: ' + response.message;
+            adminScoresList.appendChild(errorItem);
+            return;
+        }
+        
+        const scores = response.scores;
+        
+        if (scores.length === 0) {
+            const emptyItem = document.createElement('div');
+            emptyItem.classList.add('admin-item', 'empty-item');
+            emptyItem.textContent = 'No scores available';
+            adminScoresList.appendChild(emptyItem);
+            return;
+        }
+        
+        // Add header
+        const headerRow = document.createElement('div');
+        headerRow.classList.add('admin-header');
+        
+        const userHeader = document.createElement('span');
+        userHeader.textContent = 'User';
+        userHeader.style.width = '120px';
+        
+        const scoreHeader = document.createElement('span');
+        scoreHeader.textContent = 'Score';
+        scoreHeader.style.width = '70px';
+        scoreHeader.style.textAlign = 'center';
+        
+        const detailsHeader = document.createElement('span');
+        detailsHeader.textContent = 'Details';
+        detailsHeader.style.flex = '1';
+        
+        const dateHeader = document.createElement('span');
+        dateHeader.textContent = 'Date';
+        dateHeader.style.width = '180px';
+        dateHeader.style.textAlign = 'center';
+        
+        const actionHeader = document.createElement('span');
+        actionHeader.textContent = 'Action';
+        actionHeader.style.width = '80px';
+        actionHeader.style.textAlign = 'center';
+        
+        headerRow.appendChild(userHeader);
+        headerRow.appendChild(scoreHeader);
+        headerRow.appendChild(detailsHeader);
+        headerRow.appendChild(dateHeader);
+        headerRow.appendChild(actionHeader);
+        adminScoresList.appendChild(headerRow);
+        
+        // Format date helper function
+        const formatDate = (dateString) => {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        };
+        
+        // Display all scores with delete buttons
+        scores.forEach((score) => {
+            const scoreItem = document.createElement('div');
+            scoreItem.classList.add('admin-item');
+            scoreItem.dataset.scoreId = score.score_id;
+            
+            const userSpan = document.createElement('span');
+            userSpan.classList.add('admin-username');
+            userSpan.textContent = score.username;
+            userSpan.style.width = '120px';
+            
+            const scoreSpan = document.createElement('span');
+            scoreSpan.classList.add('admin-score');
+            scoreSpan.textContent = score.score;
+            scoreSpan.style.width = '70px';
+            scoreSpan.style.textAlign = 'center';
+            
+            const detailsSpan = document.createElement('span');
+            detailsSpan.classList.add('admin-details');
+            detailsSpan.textContent = `Word: ${score.word.toUpperCase()} | Attempts: ${score.attempts}/6 | Time: ${score.time}s`;
+            detailsSpan.style.flex = '1';
+            
+            const dateSpan = document.createElement('span');
+            dateSpan.classList.add('admin-date');
+            dateSpan.textContent = formatDate(score.date);
+            dateSpan.style.width = '180px';
+            dateSpan.style.textAlign = 'center';
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.classList.add('admin-delete-btn');
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.style.width = '80px';
+            deleteBtn.style.textAlign = 'center';
+            deleteBtn.addEventListener('click', () => {
+                deleteScoreFromDB(score.score_id)
+                    .then(response => {
+                        if (response.success) {
+                            scoreItem.remove(); // Remove from display
+                            showNotification('Score deleted successfully');
+                        } else {
+                            showNotification('Error: ' + response.message);
+                        }
+                    });
+            });
+            
+            scoreItem.appendChild(userSpan);
+            scoreItem.appendChild(scoreSpan);
+            scoreItem.appendChild(detailsSpan);
+            scoreItem.appendChild(dateSpan);
+            scoreItem.appendChild(deleteBtn);
+            
+            adminScoresList.appendChild(scoreItem);
+        });
+    } catch (error) {
+        console.error('Error loading all scores:', error);
+        adminScoresList.innerHTML = '';
+        const errorItem = document.createElement('div');
+        errorItem.classList.add('admin-item', 'error-item');
+        errorItem.textContent = 'Error loading scores. Please try again.';
+        adminScoresList.appendChild(errorItem);
+    }
+}
+
+// Initialize game state
+let isAdmin = false;
+
+// Add event on page load to check if user is already logged in via PHP session
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if user is logged in from PHP session
+    checkSession()
+        .then(response => {
+            if (response.success) {
+                currentUser = response.user.username;
+                isAdmin = response.user.is_admin;
+                userDisplay.textContent = currentUser;
+                
+                // Hide login form and show game
+                userSection.classList.add('hidden');
+                userInfo.classList.remove('hidden');
+                gameContainer.classList.remove('hidden');
+                
+                // Check if admin and show admin button if necessary
+                if (isAdmin) {
+                    document.getElementById('admin-button').classList.remove('hidden');
+                }
+                
+                // Start a new game
+                startNewGame();
+                
+                // Start heartbeat for active player tracking
+                startHeartbeat();
+            }
+        });
+    
+    // ...existing event listeners...
+});
