@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Woordspel</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">        <header>
+            <div class="header-top">
+                <h1>WOORDLE</h1>
+                <button id="theme-toggle" class="theme-toggle" title="Verander thema">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+            <div id="user-info" class="hidden">
+                <span id="user-display"></span>
+                <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> Uitloggen</button>
+            </div>
+        </header>
+        <div id="user-section">
+            <div id="auth-container">
+                <div class="auth-header">
+                    <h1>WOORDLE</h1>
+                    <p>Test je woordraad vaardigheden</p>
+                </div>
+                
+                <div class="tabs">
+                    <button id="login-tab" class="tab active">Inloggen</button>
+                    <button id="register-tab" class="tab">Registreren</button>
+                </div>
+
+                <div id="login-form" class="auth-form">
+                    <form id="auth-form">
+                        <div class="form-group">
+                            <div class="input-with-icon">
+                                <i class="fas fa-user"></i>
+                                <input type="text" id="username" name="username" placeholder="Gebruikersnaam" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="input-with-icon">
+                                <i class="fas fa-lock"></i>
+                                <input type="password" id="password" name="password" placeholder="Wachtwoord" required>
+                            </div>
+                        </div>
+                        <div class="form-buttons">
+                            <button type="button" id="login-btn" class="primary-btn">Inloggen</button>
+                            <button type="button" id="register-btn" class="primary-btn hidden">Registreren</button>
+                        </div>
+                        <div id="auth-message"></div>
+                    </form>
+                    
+                    <div class="auth-footer">
+                        <p>Demo account: <span class="highlight">demo / password</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="game-container" class="hidden">
+            <div id="game-board">
+                <!-- Game board will be populated by JavaScript -->
+            </div>
+            
+            <div id="keyboard">
+                <div class="keyboard-row">
+                    <button data-key="q">q</button>
+                    <button data-key="w">w</button>
+                    <button data-key="e">e</button>
+                    <button data-key="r">r</button>
+                    <button data-key="t">t</button>
+                    <button data-key="y">y</button>
+                    <button data-key="u">u</button>
+                    <button data-key="i">i</button>
+                    <button data-key="o">o</button>
+                    <button data-key="p">p</button>
+                </div>
+                <div class="keyboard-row">
+                    <div class="spacer half"></div>
+                    <button data-key="a">a</button>
+                    <button data-key="s">s</button>
+                    <button data-key="d">d</button>
+                    <button data-key="f">f</button>
+                    <button data-key="g">g</button>
+                    <button data-key="h">h</button>
+                    <button data-key="j">j</button>
+                    <button data-key="k">k</button>
+                    <button data-key="l">l</button>
+                    <div class="spacer half"></div>
+                </div>                <div class="keyboard-row">
+                    <button data-key="enter" class="wide-key">Invoeren</button>
+                    <button data-key="z">z</button>
+                    <button data-key="x">x</button>
+                    <button data-key="c">c</button>
+                    <button data-key="v">v</button>
+                    <button data-key="b">b</button>
+                    <button data-key="n">n</button>
+                    <button data-key="m">m</button>
+                    <button data-key="backspace" class="wide-key"><i class="fas fa-backspace"></i></button>
+                </div>
+            </div>
+            
+            <div id="message-container"></div>
+
+            <div id="game-results" class="hidden">
+                <div class="results-header">
+                    <h2>Spelresultaat</h2>
+                </div>
+                <div class="results-content">
+                    <p id="result-message"></p>
+                    <p id="word-reveal"></p>
+                    <div class="score-details">
+                        <div class="score-item">
+                            <span class="score-label">Pogingen:</span>
+                            <span id="attempt-count" class="score-value">0/6</span>
+                        </div>
+                        <div class="score-item">
+                            <span class="score-label">Tijd:</span>
+                            <span id="time-count" class="score-value">0s</span>
+                        </div>
+                        <div class="score-item">
+                            <span class="score-label">Score:</span>
+                            <span id="final-score" class="score-value">0</span>
+                        </div>
+                    </div>
+                    <button id="new-game-btn"><i class="fas fa-redo"></i> Opnieuw Spelen</button>
+                    <button id="share-result-btn"><i class="fas fa-share-alt"></i> Resultaat Delen</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="highscores" class="hidden">
+            <div class="highscore-header">
+                <h2><i class="fas fa-trophy"></i> Topscores</h2>
+                <button id="close-scores-btn" class="icon-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="score-tabs">
+                <button class="score-tab active" data-period="today">Vandaag</button>
+                <button class="score-tab" data-period="yesterday">Gisteren</button>
+                <button class="score-tab" data-period="alltime">Alle Tijden</button>
+            </div>
+            <div id="score-list"></div>
+        </div>
+
+        <footer>
+            <div class="footer-buttons">
+                <button id="show-scores-btn"><i class="fas fa-trophy"></i> Bekijk Topscores</button>
+                <button id="how-to-play-btn"><i class="fas fa-question-circle"></i> Spelregels</button>
+            </div>
+            <p>&copy; 2025 Woordspel - School Project</p>
+        </footer>
+    </div>    <div id="how-to-play-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Hoe Woordle te Spelen</h2>
+                <button id="close-how-to-play" class="icon-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <p>Raad het WOORD in 6 pogingen.</p>
+                <ul>
+                    <li>Elke gok moet een geldig woord van 5 letters zijn.</li>
+                    <li>Na elke gok verandert de kleur van de tegels om te laten zien hoe dicht je gok bij het woord was.</li>
+                </ul>
+                <div class="example-section">
+                    <p><strong>Voorbeelden</strong></p>
+                    <div class="example">
+                        <div class="example-row">
+                            <div class="example-tile correct">H</div>
+                            <div class="example-tile">U</div>
+                            <div class="example-tile">I</div>
+                            <div class="example-tile">S</div>
+                            <div class="example-tile">T</div>
+                        </div>
+                        <p>De letter H zit in het woord en op de juiste plek.</p>
+                    </div>
+                    <div class="example">
+                        <div class="example-row">
+                            <div class="example-tile">H</div>
+                            <div class="example-tile present">U</div>
+                            <div class="example-tile">I</div>
+                            <div class="example-tile">S</div>
+                            <div class="example-tile">T</div>
+                        </div>
+                        <p>De letter U zit in het woord maar op de verkeerde plek.</p>
+                    </div>
+                    <div class="example">
+                        <div class="example-row">
+                            <div class="example-tile">H</div>
+                            <div class="example-tile">U</div>
+                            <div class="example-tile">I</div>
+                            <div class="example-tile absent">S</div>
+                            <div class="example-tile">T</div>
+                        </div>
+                        <p>De letter S zit niet in het woord.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification hidden"></div>
+    
+    <!-- Admin Panel -->
+    <button id="admin-button" class="admin-button hidden"><i class="fas fa-cog"></i> Beheer Paneel</button>
+    
+    <div id="admin-panel" class="hidden">
+        <div class="admin-header">
+            <h2><i class="fas fa-shield-alt"></i> Beheer Dashboard</h2>
+            <button id="close-admin-btn" class="icon-btn"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="admin-tabs">
+            <button class="admin-tab active" data-tab="active-players">Actieve Spelers</button>
+            <button class="admin-tab" data-tab="all-scores">Alle Scores</button>
+        </div>
+        
+        <!-- Active Players Section -->
+        <div id="admin-active-players" class="admin-content">
+            <div class="admin-section-header">
+                <h3>Momenteel Actieve Spelers: <span id="active-player-count">0</span></h3>
+                <p class="admin-info">Spelers die langer dan 5 minuten niet actief zijn worden automatisch verwijderd</p>
+            </div>
+            <div id="active-players-list" class="admin-list"></div>
+        </div>
+        
+        <!-- All Scores Section -->
+        <div id="admin-all-scores" class="admin-content hidden">
+            <div class="admin-section-header">
+                <h3>Alle Speler Scores</h3>
+                <p class="admin-info">Klik op de Verwijder knop om een score te verwijderen</p>
+            </div>
+            <div id="admin-scores-list" class="admin-list"></div>        </div>
+    </div>
+    
+    <!-- Confetti Canvas for Animations -->
+    <canvas id="confetti-canvas"></canvas>
+    
+    <script src="script.js"></script>
+</body>
+</html>
